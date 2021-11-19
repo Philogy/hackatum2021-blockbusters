@@ -1,22 +1,17 @@
 module.exports = {
   env: {
-    browser: false,
+    commonjs: true,
     es2021: true,
-    mocha: true,
-    node: true,
+    node: true
   },
-  extends: [
-    "standard",
-    "plugin:prettier/recommended",
-    "plugin:node/recommended",
-  ],
+  extends: 'eslint:recommended',
   parserOptions: {
-    ecmaVersion: 12,
+    ecmaVersion: 12
   },
-  overrides: [
-    {
-      files: ["hardhat.config.js"],
-      globals: { task: true },
-    },
-  ],
-};
+  rules: {
+    indent: ['error', 2],
+    'linebreak-style': ['error', 'unix'],
+    quotes: ['error', 'single'],
+    semi: ['error', 'never']
+  }
+}
