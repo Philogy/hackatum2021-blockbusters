@@ -17,7 +17,7 @@ contract Bank is IBank {
 
     uint256 internal constant DEPOSIT_INTEREST = 3;
     uint256 internal constant DEBT_INTEREST = 5;
-    uint256 internal constant MIN_COLLAT_RATIO = 15000;
+    uint256 internal constant MIN_COLLAT_RATIO = 15000; // 150%
 
     uint256 internal constant SCALE = 1e4;
     IERC20 internal constant PSEUDO_ETH =
