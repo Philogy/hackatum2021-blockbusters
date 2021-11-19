@@ -4,19 +4,33 @@ pragma solidity ^0.7.0;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
+import "./lib/InterestAccount.sol";
 import "./interfaces/IPriceOracle.sol";
 import "./interfaces/IBank.sol";
 
 contract Bank is IBank {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
+    using InterestAccount for InterestAccount.Account;
 
+    uint256 internal constant DEPOSIT_INTEREST = 3;
+    uint256 internal constant DEBT_INTEREST = 5;
+
+    uint256 internal constant SCALE = 1e4;
     IERC20 internal constant PSEUDO_ETH =
         IERC20(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
     IERC20 public immutable hakToken;
     IPriceOracle public immutable priceOracle;
 
-    mapping(address => mapping(address => Account)) internal accounts;
+    struct DebtAccount {
+        uint256 debt;
+        uint256 interest;
+        uint256 lastInterestBlock;
+    }
+
+    // wallet => token => Account
+    mapping(address => mapping(address => InterestAccount.Account)) internal depositAccounts;
+    mapping(address => InterestAccount.Account) internal ethDebtAccounts;
 
     constructor(address _priceOracle, address _hakToken) {
         priceOracle = IPriceOracle(_priceOracle);
@@ -35,9 +49,10 @@ contract Bank is IBank {
         } else {
             revert("Bank: Unsupported token");
         }
-        Account storage account = accounts[_token][msg.sender];
-        _updateInterest(account);
-        account.deposit = account.deposit.add(_amount);
+        InterestAccount.Account storage depositAccount
+            = depositAccounts[msg.sender][_token];
+        depositAccount.updateInterest(DEPOSIT_INTEREST, _getBlockNumber());
+        depositAccount.balance = depositAccount.balance.add(_amount);
         emit Deposit(msg.sender, _token, _amount);
         return true;
     }
@@ -69,19 +84,23 @@ contract Bank is IBank {
     function getBalance(address _token)
         external view override returns (uint256)
     {
-
+        return depositAccounts[msg.sender][_token]
+            .getTotalBalance(DEPOSIT_INTEREST, _getBlockNumber());
     }
 
     function getCollateralRatio(address _token, address _account)
         external view override returns (uint256)
     {
-
+        require(_token == address(hakToken), "Bank: Invalid collateral");
+        uint256 assetBalance = depositAccounts[_account][_token]
+            .getTotalBalance(DEPOSIT_INTEREST, _getBlockNumber());
+        uint256 debtBalance = ethDebtAccounts[_account]
+            .getTotalBalance(DEBT_INTEREST, _getBlockNumber());
+        if (debtBalance == 0) return type(uint256).max;
+        return assetBalance.mul(SCALE).div(debtBalance);
     }
 
-    function _updateInterest(Account storage _account) internal {
-        uint256 passedBlocks = block.number.sub(_account.lastInterestBlock);
-        uint256 newInterest = _account.deposit * 3 * passedBlocks / 1e4;
-        _account.lastInterestBlock = block.number;
-        _account.interest = _account.interest.add(newInterest);
+    function _getBlockNumber() internal virtual view returns (uint256) {
+        return block.number;
     }
 }

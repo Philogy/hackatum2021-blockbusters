@@ -11,5 +11,5 @@ interface IPriceOracle {
      * @param token - the ERC20 token for which you want to get the price in ETH.
      * @return - the price in ETH of the given token at that moment in time.
      */
-    function getVirtualPrice(address token) view external returns (uint256);
+    function getVirtualPrice(address token) external view returns (uint256);
 }
