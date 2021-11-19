@@ -4,6 +4,7 @@ pragma solidity ^0.7.0;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 import "./lib/InterestAccount.sol";
 import "./interfaces/IPriceOracle.sol";
 import "./interfaces/IBank.sol";
@@ -11,22 +12,18 @@ import "./interfaces/IBank.sol";
 contract Bank is IBank {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
+    using Address for address payable;
     using InterestAccount for InterestAccount.Account;
 
     uint256 internal constant DEPOSIT_INTEREST = 3;
     uint256 internal constant DEBT_INTEREST = 5;
+    uint256 internal constant MIN_COLLAT_RATIO = 15000;
 
     uint256 internal constant SCALE = 1e4;
     IERC20 internal constant PSEUDO_ETH =
         IERC20(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
     IERC20 public immutable hakToken;
     IPriceOracle public immutable priceOracle;
-
-    struct DebtAccount {
-        uint256 debt;
-        uint256 interest;
-        uint256 lastInterestBlock;
-    }
 
     // wallet => token => Account
     mapping(address => mapping(address => InterestAccount.Account)) internal depositAccounts;
@@ -51,8 +48,7 @@ contract Bank is IBank {
         }
         InterestAccount.Account storage depositAccount
             = depositAccounts[msg.sender][_token];
-        depositAccount.updateInterest(DEPOSIT_INTEREST, _getBlockNumber());
-        depositAccount.balance = depositAccount.balance.add(_amount);
+        depositAccount.increaseBalanceBy(_amount, DEPOSIT_INTEREST, _getBlockNumber());
         emit Deposit(msg.sender, _token, _amount);
         return true;
     }
@@ -66,7 +62,25 @@ contract Bank is IBank {
     function borrow(address _token, uint256 _amount)
         external override returns (uint256)
     {
-
+        require(_token == address(PSEUDO_ETH), "Bank: Can only borrow ETH");
+        uint256 assetBalance = getBalance(address(hakToken));
+        require(assetBalance > 0, "Bank: No collateral");
+        uint256 assetEthValue = _hakToEth(assetBalance);
+        uint256 maxDebt = assetEthValue.mul(SCALE).div(MIN_COLLAT_RATIO);
+        uint256 existingDebt = _getDebtBalanceOf(msg.sender);
+        uint256 maxBorrow = maxDebt.sub(existingDebt, "Bank: Below min collat ratio");
+        require(_amount <= maxBorrow, "Bank: Attempted overdraft");
+        if (_amount == 0) _amount = maxBorrow;
+        ethDebtAccounts[msg.sender]
+            .increaseBalanceBy(_amount, DEBT_INTEREST, _getBlockNumber());
+        emit Borrow(
+            msg.sender,
+            address(PSEUDO_ETH),
+            _amount,
+            assetEthValue.mul(SCALE).div(_amount.add(existingDebt))
+        );
+        payable(msg.sender).sendValue(_amount);
+        return getCollateralRatio(address(hakToken), msg.sender);
     }
 
     function repay(address _token, uint256 _amount)
@@ -82,22 +96,32 @@ contract Bank is IBank {
     }
 
     function getBalance(address _token)
-        external view override returns (uint256)
+        public view override returns (uint256)
     {
         return depositAccounts[msg.sender][_token]
             .getTotalBalance(DEPOSIT_INTEREST, _getBlockNumber());
     }
 
     function getCollateralRatio(address _token, address _account)
-        external view override returns (uint256)
+        public view override returns (uint256)
     {
         require(_token == address(hakToken), "Bank: Invalid collateral");
+        uint256 debtBalance = _getDebtBalanceOf(_account);
+        if (debtBalance == 0) return type(uint256).max;
         uint256 assetBalance = depositAccounts[_account][_token]
             .getTotalBalance(DEPOSIT_INTEREST, _getBlockNumber());
-        uint256 debtBalance = ethDebtAccounts[_account]
-            .getTotalBalance(DEBT_INTEREST, _getBlockNumber());
-        if (debtBalance == 0) return type(uint256).max;
-        return assetBalance.mul(SCALE).div(debtBalance);
+        return _hakToEth(assetBalance).mul(SCALE).div(debtBalance);
+    }
+
+    function _hakToEth(uint256 _hakAmount) internal view returns (uint256) {
+        uint256 hakToEthPrice = priceOracle.getVirtualPrice(address(hakToken));
+        return _hakAmount.mul(hakToEthPrice).div(1e18);
+    }
+
+    function _getDebtBalanceOf(address _account)
+        internal view returns (uint256)
+    {
+        return ethDebtAccounts[_account].getTotalBalance(DEBT_INTEREST, _getBlockNumber());
     }
 
     function _getBlockNumber() internal virtual view returns (uint256) {
