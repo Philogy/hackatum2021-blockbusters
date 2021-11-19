@@ -41,7 +41,7 @@ library InterestAccount {
         uint256 _interestRate,
         uint256 _blockNumber
     ) internal view returns (uint256) {
-        uint256 totalInterest = getNewInterest(
+        uint256 totalInterest = getTotalInterest(
             _account,
             _interestRate,
             _blockNumber
@@ -59,5 +59,6 @@ library InterestAccount {
             _interestRate,
             _blockNumber
         );
+        _account.lastInterestBlock = _blockNumber;
     }
 }
