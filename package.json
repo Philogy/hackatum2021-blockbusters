@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "REPORT_GAS=true npx hardhat test"
+    "compile": "hardhat compile",
+    "test": "REPORT_GAS=true hardhat test"
   },
   "author": "",
   "license": "ISC",
@@ -29,5 +30,8 @@
     "prettier-plugin-solidity": "^1.0.0-beta.13",
     "solhint": "^3.3.6",
     "solidity-coverage": "^0.7.17"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^3.4.2-solc-0.7"
   }
 }
