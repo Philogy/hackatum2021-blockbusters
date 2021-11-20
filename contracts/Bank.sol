@@ -5,13 +5,14 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./flashloan/FlashloanProvider.sol";
 import "./lib/InterestAccount.sol";
 import "./lib/Constants.sol";
 import "./interfaces/IPriceOracle.sol";
 import "./interfaces/IBank.sol";
 
-contract Bank is IBank, FlashloanProvider {
+contract Bank is IBank, FlashloanProvider, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
     using Address for address payable;
@@ -29,13 +30,19 @@ contract Bank is IBank, FlashloanProvider {
     mapping(address => mapping(address => InterestAccount.Account)) internal depositAccounts;
     mapping(address => InterestAccount.Account) internal ethDebtAccounts;
 
+<<<<<<< HEAD
     constructor(address _priceOracle, address _hakToken) FlashloanProvider() {
+=======
+    constructor(address _priceOracle, address _hakToken)
+        FlashloanProvider() ReentrancyGuard()
+    {
+>>>>>>> main
         priceOracle = IPriceOracle(_priceOracle);
         hakToken = IERC20(_hakToken);
     }
 
     function deposit(address _token, uint256 _amount)
-        external payable override returns (bool)
+        external payable override nonReentrant returns (bool)
     {
         if (_token == address(Constants.PSEUDO_ETH)) {
             require(msg.value > 0, "Bank: Deposit of 0");
@@ -44,7 +51,7 @@ contract Bank is IBank, FlashloanProvider {
             require(msg.value == 0, "Bank: Attempted ETH deposit");
             hakToken.safeTransferFrom(msg.sender, address(this), _amount);
         } else {
-            revert("Bank: Unsupported token");
+            revert("token not supported");
         }
         InterestAccount.Account storage depositAccount
             = depositAccounts[msg.sender][_token];
@@ -55,37 +62,40 @@ contract Bank is IBank, FlashloanProvider {
 
 
     function withdraw(address _token, uint256 _amount)
-        external override returns (uint256)
+        external override nonReentrant returns (uint256)
     {
         InterestAccount.Account storage depositAccount
             = depositAccounts[msg.sender][_token];
         uint256 depositedBalance = getBalance(_token);
         if(_amount == 0) _amount = depositedBalance;
-        require(depositedBalance >= _amount, "Bank: Insufficient Balance");
+        require(
+            _token == address(PSEUDO_ETH) || _token == address(hakToken),
+            "token not supported"
+        );
+        require(depositedBalance > 0, "no balance");
+        require(depositedBalance >= _amount, "amount exceeds balance");
         depositAccount.decreaseBalanceBy(_amount, DEPOSIT_INTEREST, _getBlockNumber());
         if (_token == address(Constants.PSEUDO_ETH)) {
             emit Withdraw(msg.sender, _token, _amount);
             payable(msg.sender).sendValue(_amount);
-        } else if (_token == address(hakToken)) {
+        } else {
             hakToken.safeTransfer(msg.sender, _amount);
             emit Withdraw(msg.sender, _token, _amount);
-        } else {
-            revert("Bank: Unsupported token");
         }
         return _amount;
     }
 
     function borrow(address _token, uint256 _amount)
-        external override returns (uint256)
+        external override nonReentrant returns (uint256)
     {
         require(_token == address(Constants.PSEUDO_ETH), "Bank: Can only borrow ETH");
         uint256 assetBalance = getBalance(address(hakToken));
-        require(assetBalance > 0, "Bank: No collateral");
+        require(assetBalance > 0, "no collateral deposited");
         uint256 assetEthValue = _hakToEth(assetBalance);
         uint256 maxDebt = assetEthValue.mul(SCALE).div(MIN_COLLAT_RATIO);
         uint256 existingDebt = _getDebtBalanceOf(msg.sender);
         uint256 maxBorrow = maxDebt.sub(existingDebt, "Bank: Below min collat ratio");
-        require(_amount <= maxBorrow, "Bank: Attempted overdraft");
+        require(_amount <= maxBorrow, "borrow would exceed collateral ratio");
         if (_amount == 0) _amount = maxBorrow;
         ethDebtAccounts[msg.sender]
             .increaseBalanceBy(_amount, DEBT_INTEREST, _getBlockNumber());
@@ -100,21 +110,43 @@ contract Bank is IBank, FlashloanProvider {
     }
 
     function repay(address _token, uint256 _amount)
-        external payable override returns (uint256)
+        external payable override nonReentrant returns (uint256)
     {
-
+        require(_token == address(PSEUDO_ETH), "token not supported");
+        require(_amount == 0 || _amount == msg.value, "msg.value < amount to repay");
+        uint256 debtBalance = _getDebtBalanceOf(msg.sender);
+        require(debtBalance > 0, "nothing to repay");
+        InterestAccount.Account storage debtAccount = ethDebtAccounts[msg.sender];
+        uint256 leftOver;
+        uint256 refund;
+        uint256 remainingDebt;
+        if (debtBalance >= msg.value) {
+            debtAccount.decreaseBalanceBy(msg.value, DEBT_INTEREST, _getBlockNumber());
+            leftOver = debtAccount.balance;
+            remainingDebt = debtBalance - msg.value;
+        } else {
+            debtAccount.reset();
+            refund = msg.value.sub(debtBalance);
+        }
+        emit Repay(
+            msg.sender,
+            address(PSEUDO_ETH),
+            remainingDebt
+        );
+        if (refund > 0) payable(msg.sender).sendValue(refund);
+        return leftOver;
     }
 
     function liquidate(address _token, address _account)
-        external payable override returns (bool)
+        external payable override nonReentrant returns (bool)
     {
         require(
             getCollateralRatio(_token, _account) < MIN_COLLAT_RATIO,
-            "Bank: Cannot liquidate account"
+            "healty position"
         );
-        require(_account != msg.sender, "Bank: Attempted self liquidation");
+        require(_account != msg.sender, "cannot liquidate own position");
         uint256 debtBalance = _getDebtBalanceOf(_account);
-        uint256 refund = msg.value.sub(debtBalance, "Bank: Insufficient repayment");
+        uint256 refund = msg.value.sub(debtBalance, "insufficient ETH sent by liquidator");
         ethDebtAccounts[_account].reset();
         InterestAccount.Account storage collateralAccount =
             depositAccounts[_account][_token];
@@ -143,7 +175,7 @@ contract Bank is IBank, FlashloanProvider {
     function getCollateralRatio(address _token, address _account)
         public view override returns (uint256)
     {
-        require(_token == address(hakToken), "Bank: Invalid collateral");
+        require(_token == address(hakToken), "token not supported");
         uint256 assetBalance = depositAccounts[_account][_token]
             .getTotalBalance(DEPOSIT_INTEREST, _getBlockNumber());
         if (assetBalance == 0) return 0;
