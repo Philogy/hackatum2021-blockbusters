@@ -43,6 +43,6 @@ contract FlashloanProvider is ReentrancyGuard, Ownable, IFlashloanProvider {
             IFlashloanRecipient(msg.sender).receiveFlashloan(_token, _amount);
             balanceAfter = _token.balanceOf(address(this));
         }
-        require(balanceAfter >= balanceBefore, "Flash: Not returned");
+        require(balanceAfter == balanceBefore, "Flash: Not returned");
     }
 }
