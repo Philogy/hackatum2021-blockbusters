@@ -73,7 +73,7 @@ describe('Bank contract', function () {
   describe('deposit', async function () {
     it('unsupported token', async function () {
       await expect(bank.deposit(await acc1.getAddress(), 1337)).to.be.revertedWith(
-        'Bank: Unsupported token'
+        'token not supported'
       )
     })
 
@@ -83,12 +83,9 @@ describe('Bank contract', function () {
       let balanceBefore = await hak.balanceOf(await acc1.getAddress())
       await hak.transfer(await acc1.getAddress(), amount)
       await hak1.approve(bank.address, amount)
-      expect(await hak.allowance(await acc1.getAddress(), bank.address)).equals(
-        amount,
-        'wrong allowance'
-      )
+      expect(await hak.allowance(await acc1.getAddress(), bank.address)).equals(amount)
       await bank1.deposit(hak.address, amount)
-      expect(await bank1.getBalance(hak.address)).equals(amount, 'wrong balance')
+      expect(await bank1.getBalance(hak.address)).equals(amount)
       expect(await hak.balanceOf(await acc1.getAddress())).equals(0)
     })
 
@@ -188,7 +185,7 @@ describe('Bank contract', function () {
   describe('borrow', async function () {
     it('no collateral', async function () {
       let amount = BigNumber.from(1000)
-      await expect(bank1.borrow(ethMagic, amount)).to.be.revertedWith('Bank: No collateral')
+      await expect(bank1.borrow(ethMagic, amount)).to.be.revertedWith('no collateral deposited')
     })
 
     it('basic borrow', async function () {
@@ -210,7 +207,7 @@ describe('Bank contract', function () {
       await hak1.approve(bank.address, collateralAmount)
       await bank1.deposit(hak.address, collateralAmount)
       await expect(bank1.borrow(ethMagic, borrowAmount)).to.be.revertedWith(
-        'Bank: Attempted overdraft'
+        'borrow would exceed collateral ratio'
       )
     })
 
@@ -226,7 +223,7 @@ describe('Bank contract', function () {
       expect(await bank1.getCollateralRatio(hak.address, await acc1.getAddress())).equals(16671)
 
       await expect(bank1.borrow(ethMagic, borrowAmount)).to.be.revertedWith(
-        'Bank: Attempted overdraft'
+        'borrow would exceed collateral ratio'
       )
       expect(await bank1.getCollateralRatio(hak.address, await acc1.getAddress())).equals(16668)
     })
@@ -362,13 +359,13 @@ describe('Bank contract', function () {
   describe('liquidate', async function () {
     it('liquidates a different token than HAK', async function () {
       await expect(bank1.liquidate(ethMagic, await acc1.getAddress())).to.be.revertedWith(
-        'Bank: Invalid collateral'
+        'token not supported'
       )
     })
 
     it('liquidates own account', async function () {
       await expect(bank1.liquidate(hak.address, await acc1.getAddress())).to.be.revertedWith(
-        'Bank: Attempted self liquidation'
+        'cannot liquidate own position'
       )
     })
 
@@ -384,7 +381,7 @@ describe('Bank contract', function () {
       let liquidatorAmount = ethers.utils.parseEther('16.0')
       await expect(
         bank2.liquidate(hak.address, await acc1.getAddress(), { value: liquidatorAmount })
-      ).to.be.revertedWith('Bank: Cannot liquidate account')
+      ).to.be.revertedWith('healty position')
     })
 
     it('collateral ratio lower than 150%', async function () {
@@ -433,7 +430,7 @@ describe('Bank contract', function () {
       let liquidatorAmount = ethers.utils.parseEther('10.0')
       await expect(
         bank2.liquidate(hak.address, await acc1.getAddress(), { value: liquidatorAmount })
-      ).to.be.revertedWith('Bank: Insufficient repayment')
+      ).to.be.revertedWith('insufficient ETH sent by liquidator')
     })
   })
 })
