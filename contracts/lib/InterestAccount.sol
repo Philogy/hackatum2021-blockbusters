@@ -71,4 +71,11 @@ library InterestAccount {
         updateInterest(_account, _interestRate, _blockNumber);
         _account.balance = _account.balance.add(_increase);
     }
+
+    function reset(
+        Account storage _account
+    ) internal {
+        _account.balance = 0;
+        _account.interest = 0;
+    }
 }
