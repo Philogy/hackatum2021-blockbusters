@@ -108,7 +108,29 @@ contract Bank is IBank {
     function liquidate(address _token, address _account)
         external payable override returns (bool)
     {
-
+        require(
+            getCollateralRatio(_token, _account) < MIN_COLLAT_RATIO,
+            "Bank: Cannot liquidate account"
+        );
+        require(_account != msg.sender, "Bank: Attempted self liquidation");
+        uint256 debtBalance = _getDebtBalanceOf(_account);
+        uint256 refund = msg.value.sub(debtBalance, "Bank: Insufficient repayment");
+        ethDebtAccounts[_account].reset();
+        InterestAccount.Account storage collateralAccount =
+            depositAccounts[_account][_token];
+        uint256 liquidatedDeposit = collateralAccount
+            .getTotalBalance(DEPOSIT_INTEREST, _getBlockNumber());
+        collateralAccount.reset();
+        hakToken.safeTransfer(msg.sender, liquidatedDeposit);
+        emit Liquidate(
+            msg.sender,
+            _account,
+            _token,
+            liquidatedDeposit,
+            refund
+        );
+        payable(msg.sender).sendValue(refund);
+        return true;
     }
 
     function getBalance(address _token)
@@ -122,10 +144,11 @@ contract Bank is IBank {
         public view override returns (uint256)
     {
         require(_token == address(hakToken), "Bank: Invalid collateral");
-        uint256 debtBalance = _getDebtBalanceOf(_account);
-        if (debtBalance == 0) return type(uint256).max;
         uint256 assetBalance = depositAccounts[_account][_token]
             .getTotalBalance(DEPOSIT_INTEREST, _getBlockNumber());
+        if (assetBalance == 0) return 0;
+        uint256 debtBalance = _getDebtBalanceOf(_account);
+        if (debtBalance == 0) return type(uint256).max;
         return _hakToEth(assetBalance).mul(SCALE).div(debtBalance);
     }
 
