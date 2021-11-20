@@ -362,13 +362,13 @@ describe('Bank contract', function () {
   describe('liquidate', async function () {
     it('liquidates a different token than HAK', async function () {
       await expect(bank1.liquidate(ethMagic, await acc1.getAddress())).to.be.revertedWith(
-        'token not supported'
+        'Bank: Invalid collateral'
       )
     })
 
     it('liquidates own account', async function () {
       await expect(bank1.liquidate(hak.address, await acc1.getAddress())).to.be.revertedWith(
-        'cannot liquidate own position'
+        'Bank: Attempted self liquidation'
       )
     })
 
@@ -384,7 +384,7 @@ describe('Bank contract', function () {
       let liquidatorAmount = ethers.utils.parseEther('16.0')
       await expect(
         bank2.liquidate(hak.address, await acc1.getAddress(), { value: liquidatorAmount })
-      ).to.be.revertedWith('healty position')
+      ).to.be.revertedWith('Bank: Cannot liquidate account')
     })
 
     it('collateral ratio lower than 150%', async function () {
@@ -399,7 +399,7 @@ describe('Bank contract', function () {
       await mineBlocks(99)
       let liquidatorEthBalanceBefore = await acc2.getBalance()
       let liquidatorHakBalanceBefore = await hak2.balanceOf(await acc2.getAddress())
-      collateralAmount = ethers.utils.parseEther('15.0045')
+      collateralAmount = ethers.utils.parseEther('15.4545')
       let liquidatorAmount = ethers.utils.parseEther('16.0')
       await expect(
         bank2.liquidate(hak.address, await acc1.getAddress(), { value: liquidatorAmount })
@@ -433,7 +433,7 @@ describe('Bank contract', function () {
       let liquidatorAmount = ethers.utils.parseEther('10.0')
       await expect(
         bank2.liquidate(hak.address, await acc1.getAddress(), { value: liquidatorAmount })
-      ).to.be.revertedWith('insufficient ETH sent by liquidator')
+      ).to.be.revertedWith('Bank: Insufficient repayment')
     })
   })
 })
