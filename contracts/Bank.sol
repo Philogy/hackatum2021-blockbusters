@@ -5,7 +5,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./flashloan/FlashloanProvider.sol";
 import "./lib/InterestAccount.sol";
 import "./lib/Constants.sol";
@@ -73,6 +72,10 @@ contract Bank is IBank, FlashloanProvider {
             emit Withdraw(msg.sender, _token, _amount);
             payable(msg.sender).sendValue(_amount);
         } else {
+            require(
+                getCollateralRatio(_token, msg.sender) >= MIN_COLLAT_RATIO,
+                "Bank: Withdrawing necessary"
+            );
             hakToken.safeTransfer(msg.sender, _amount);
             emit Withdraw(msg.sender, _token, _amount);
         }
