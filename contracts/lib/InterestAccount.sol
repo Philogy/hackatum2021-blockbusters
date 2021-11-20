@@ -62,6 +62,20 @@ library InterestAccount {
         _account.lastInterestBlock = _blockNumber;
     }
 
+    function decreaseBalanceBy(
+        Account storage _account,
+        uint256 _decrease,
+        uint256 _interestRate,
+        uint256 _blockNumber
+    ) internal {
+        uint256 interest = getTotalInterest(_account, _interestRate, _blockNumber);
+        if(_decrease <= interest) {
+            _account.interest = interest.sub(_decrease);
+        } else {
+            _account.balance = _account.balance.sub(_decrease.sub(interest));
+            _account.interest = 0;
+        }
+
     function increaseBalanceBy(
         Account storage _account,
         uint256 _increase,

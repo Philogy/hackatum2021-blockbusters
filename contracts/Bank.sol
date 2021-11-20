@@ -53,10 +53,26 @@ contract Bank is IBank {
         return true;
     }
 
+
     function withdraw(address _token, uint256 _amount)
         external override returns (uint256)
     {
-
+        InterestAccount.Account storage depositAccount
+            = depositAccounts[msg.sender][_token];
+        uint256 depositedBalance = getBalance(_token);
+        if(_amount == 0) _amount = depositedBalance;
+        require(depositedBalance >= _amount, "Bank: Insufficient Balance");
+        depositAccount.decreaseBalanceBy(_amount, DEPOSIT_INTEREST, _getBlockNumber());
+        if (_token == address(PSEUDO_ETH)) {
+            emit Withdraw(msg.sender, _token, _amount);
+            payable(msg.sender).sendValue(_amount);
+        } else if (_token == address(hakToken)) {
+            hakToken.safeTransfer(msg.sender, _amount);
+            emit Withdraw(msg.sender, _token, _amount);
+        } else {
+            revert("Bank: Unsupported token");
+        }
+        return _amount;
     }
 
     function borrow(address _token, uint256 _amount)
