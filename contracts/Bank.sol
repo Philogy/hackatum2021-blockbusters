@@ -6,11 +6,13 @@ import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "./flashloan/FlashloanProvider.sol";
 import "./lib/InterestAccount.sol";
+import "./lib/Constants.sol";
 import "./interfaces/IPriceOracle.sol";
 import "./interfaces/IBank.sol";
 
-contract Bank is IBank, ReentrancyGuard {
+contract Bank is IBank, FlashloanProvider, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
     using Address for address payable;
@@ -21,8 +23,6 @@ contract Bank is IBank, ReentrancyGuard {
     uint256 internal constant MIN_COLLAT_RATIO = 15000; // 150%
 
     uint256 internal constant SCALE = 1e4;
-    IERC20 internal constant PSEUDO_ETH =
-        IERC20(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
     IERC20 public immutable hakToken;
     IPriceOracle public immutable priceOracle;
 
@@ -30,7 +30,9 @@ contract Bank is IBank, ReentrancyGuard {
     mapping(address => mapping(address => InterestAccount.Account)) internal depositAccounts;
     mapping(address => InterestAccount.Account) internal ethDebtAccounts;
 
-    constructor(address _priceOracle, address _hakToken) ReentrancyGuard() {
+    constructor(address _priceOracle, address _hakToken)
+        FlashloanProvider() ReentrancyGuard()
+    {
         priceOracle = IPriceOracle(_priceOracle);
         hakToken = IERC20(_hakToken);
     }
@@ -38,7 +40,7 @@ contract Bank is IBank, ReentrancyGuard {
     function deposit(address _token, uint256 _amount)
         external payable override nonReentrant returns (bool)
     {
-        if (_token == address(PSEUDO_ETH)) {
+        if (_token == address(Constants.PSEUDO_ETH)) {
             require(msg.value > 0, "Bank: Deposit of 0");
             require(msg.value == _amount, "Bank: Amount mismatch");
         } else if (_token == address(hakToken)) {
@@ -69,7 +71,7 @@ contract Bank is IBank, ReentrancyGuard {
         require(depositedBalance > 0, "no balance");
         require(depositedBalance >= _amount, "amount exceeds balance");
         depositAccount.decreaseBalanceBy(_amount, DEPOSIT_INTEREST, _getBlockNumber());
-        if (_token == address(PSEUDO_ETH)) {
+        if (_token == address(Constants.PSEUDO_ETH)) {
             emit Withdraw(msg.sender, _token, _amount);
             payable(msg.sender).sendValue(_amount);
         } else {
@@ -82,7 +84,7 @@ contract Bank is IBank, ReentrancyGuard {
     function borrow(address _token, uint256 _amount)
         external override nonReentrant returns (uint256)
     {
-        require(_token == address(PSEUDO_ETH), "Bank: Can only borrow ETH");
+        require(_token == address(Constants.PSEUDO_ETH), "Bank: Can only borrow ETH");
         uint256 assetBalance = getBalance(address(hakToken));
         require(assetBalance > 0, "no collateral deposited");
         uint256 assetEthValue = _hakToEth(assetBalance);
@@ -95,7 +97,7 @@ contract Bank is IBank, ReentrancyGuard {
             .increaseBalanceBy(_amount, DEBT_INTEREST, _getBlockNumber());
         emit Borrow(
             msg.sender,
-            address(PSEUDO_ETH),
+            address(Constants.PSEUDO_ETH),
             _amount,
             assetEthValue.mul(SCALE).div(_amount.add(existingDebt))
         );
