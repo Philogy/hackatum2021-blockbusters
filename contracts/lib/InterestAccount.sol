@@ -61,4 +61,14 @@ library InterestAccount {
         );
         _account.lastInterestBlock = _blockNumber;
     }
+
+    function increaseBalanceBy(
+        Account storage _account,
+        uint256 _increase,
+        uint256 _interestRate,
+        uint256 _blockNumber
+    ) internal {
+        updateInterest(_account, _interestRate, _blockNumber);
+        _account.balance = _account.balance.add(_increase);
+    }
 }
