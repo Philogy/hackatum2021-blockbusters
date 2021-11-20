@@ -45,7 +45,7 @@ contract Bank is IBank, ReentrancyGuard {
             require(msg.value == 0, "Bank: Attempted ETH deposit");
             hakToken.safeTransferFrom(msg.sender, address(this), _amount);
         } else {
-            revert("Bank: Unsupported token");
+            revert("token not supported");
         }
         InterestAccount.Account storage depositAccount
             = depositAccounts[msg.sender][_token];
@@ -64,9 +64,10 @@ contract Bank is IBank, ReentrancyGuard {
         if(_amount == 0) _amount = depositedBalance;
         require(
             _token == address(PSEUDO_ETH) || _token == address(hakToken),
-            "Bank: Unsupported token"
+            "token not supported"
         );
-        require(depositedBalance >= _amount, "Bank: Insufficient balance");
+        require(depositedBalance > 0, "no balance");
+        require(depositedBalance >= _amount, "amount exceeds balance");
         depositAccount.decreaseBalanceBy(_amount, DEPOSIT_INTEREST, _getBlockNumber());
         if (_token == address(PSEUDO_ETH)) {
             emit Withdraw(msg.sender, _token, _amount);
@@ -83,12 +84,12 @@ contract Bank is IBank, ReentrancyGuard {
     {
         require(_token == address(PSEUDO_ETH), "Bank: Can only borrow ETH");
         uint256 assetBalance = getBalance(address(hakToken));
-        require(assetBalance > 0, "Bank: No collateral");
+        require(assetBalance > 0, "no collateral deposited");
         uint256 assetEthValue = _hakToEth(assetBalance);
         uint256 maxDebt = assetEthValue.mul(SCALE).div(MIN_COLLAT_RATIO);
         uint256 existingDebt = _getDebtBalanceOf(msg.sender);
         uint256 maxBorrow = maxDebt.sub(existingDebt, "Bank: Below min collat ratio");
-        require(_amount <= maxBorrow, "Bank: Attempted overdraft");
+        require(_amount <= maxBorrow, "borrow would exceed collateral ratio");
         if (_amount == 0) _amount = maxBorrow;
         ethDebtAccounts[msg.sender]
             .increaseBalanceBy(_amount, DEBT_INTEREST, _getBlockNumber());
@@ -105,10 +106,10 @@ contract Bank is IBank, ReentrancyGuard {
     function repay(address _token, uint256 _amount)
         external payable override nonReentrant returns (uint256)
     {
-        require(_token == address(PSEUDO_ETH), "Bank: Invalid debt token");
-        require(_amount <= msg.value, "Bank: Amount mismatch");
+        require(_token == address(PSEUDO_ETH), "token not supported");
+        require(_amount == 0 || _amount == msg.value, "msg.value < amount to repay");
         uint256 debtBalance = _getDebtBalanceOf(msg.sender);
-        require(debtBalance > 0, "Bank: No debt to repay");
+        require(debtBalance > 0, "nothing to repay");
         InterestAccount.Account storage debtAccount = ethDebtAccounts[msg.sender];
         uint256 leftOver;
         uint256 refund;
@@ -135,11 +136,11 @@ contract Bank is IBank, ReentrancyGuard {
     {
         require(
             getCollateralRatio(_token, _account) < MIN_COLLAT_RATIO,
-            "Bank: Cannot liquidate account"
+            "healty position"
         );
-        require(_account != msg.sender, "Bank: Attempted self liquidation");
+        require(_account != msg.sender, "cannot liquidate own position");
         uint256 debtBalance = _getDebtBalanceOf(_account);
-        uint256 refund = msg.value.sub(debtBalance, "Bank: Insufficient repayment");
+        uint256 refund = msg.value.sub(debtBalance, "insufficient ETH sent by liquidator");
         ethDebtAccounts[_account].reset();
         InterestAccount.Account storage collateralAccount =
             depositAccounts[_account][_token];
@@ -168,7 +169,7 @@ contract Bank is IBank, ReentrancyGuard {
     function getCollateralRatio(address _token, address _account)
         public view override returns (uint256)
     {
-        require(_token == address(hakToken), "Bank: Invalid collateral");
+        require(_token == address(hakToken), "token not supported");
         uint256 assetBalance = depositAccounts[_account][_token]
             .getTotalBalance(DEPOSIT_INTEREST, _getBlockNumber());
         if (assetBalance == 0) return 0;
