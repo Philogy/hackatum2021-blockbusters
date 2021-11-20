@@ -62,16 +62,18 @@ contract Bank is IBank, ReentrancyGuard {
             = depositAccounts[msg.sender][_token];
         uint256 depositedBalance = getBalance(_token);
         if(_amount == 0) _amount = depositedBalance;
-        require(depositedBalance >= _amount, "Bank: Insufficient Balance");
+        require(
+            _token == address(PSEUDO_ETH) || _token == address(hakToken),
+            "Bank: Unsupported token"
+        );
+        require(depositedBalance >= _amount, "Bank: Insufficient balance");
         depositAccount.decreaseBalanceBy(_amount, DEPOSIT_INTEREST, _getBlockNumber());
         if (_token == address(PSEUDO_ETH)) {
             emit Withdraw(msg.sender, _token, _amount);
             payable(msg.sender).sendValue(_amount);
-        } else if (_token == address(hakToken)) {
+        } else {
             hakToken.safeTransfer(msg.sender, _amount);
             emit Withdraw(msg.sender, _token, _amount);
-        } else {
-            revert("Bank: Unsupported token");
         }
         return _amount;
     }

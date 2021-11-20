@@ -104,21 +104,25 @@ describe('Bank contract', function () {
   describe('withdraw', async function () {
     it('unsupported token', async function () {
       await expect(bank.withdraw(await acc1.getAddress(), 1337)).to.be.revertedWith(
-        'token not supported'
+        'Bank: Unsupported token'
       )
     })
 
     it('without balance', async function () {
       let amount = BigNumber.from(1337)
-      await expect(bank1.withdraw(ethMagic, amount)).to.be.revertedWith('no balance')
-      await expect(bank1.withdraw(hak.address, amount)).to.be.revertedWith('no balance')
+      await expect(bank1.withdraw(ethMagic, amount)).to.be.revertedWith(
+        'Bank: Insufficient balance'
+      )
+      await expect(bank1.withdraw(hak.address, amount)).to.be.revertedWith(
+        'Bank: Insufficient balance'
+      )
     })
 
     it('balance too low', async function () {
       let amount = BigNumber.from(10000)
       await bank1.deposit(ethMagic, amount, { value: amount })
       await expect(bank1.withdraw(ethMagic, amount.add(1000))).to.be.revertedWith(
-        'amount exceeds balance'
+        'Bank: Insufficient balance'
       )
     })
   })
