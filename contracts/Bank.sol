@@ -12,7 +12,7 @@ import "./lib/Constants.sol";
 import "./interfaces/IPriceOracle.sol";
 import "./interfaces/IBank.sol";
 
-contract Bank is IBank, FlashloanProvider, ReentrancyGuard {
+contract Bank is IBank, FlashloanProvider {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
     using Address for address payable;
@@ -30,9 +30,7 @@ contract Bank is IBank, FlashloanProvider, ReentrancyGuard {
     mapping(address => mapping(address => InterestAccount.Account)) internal depositAccounts;
     mapping(address => InterestAccount.Account) internal ethDebtAccounts;
 
-    constructor(address _priceOracle, address _hakToken)
-        FlashloanProvider() ReentrancyGuard()
-    {
+    constructor(address _priceOracle, address _hakToken) FlashloanProvider() {
         priceOracle = IPriceOracle(_priceOracle);
         hakToken = IERC20(_hakToken);
     }
@@ -65,7 +63,7 @@ contract Bank is IBank, FlashloanProvider, ReentrancyGuard {
         uint256 depositedBalance = getBalance(_token);
         if(_amount == 0) _amount = depositedBalance;
         require(
-            _token == address(PSEUDO_ETH) || _token == address(hakToken),
+            _token == address(Constants.PSEUDO_ETH) || _token == address(hakToken),
             "token not supported"
         );
         require(depositedBalance > 0, "no balance");
@@ -108,7 +106,7 @@ contract Bank is IBank, FlashloanProvider, ReentrancyGuard {
     function repay(address _token, uint256 _amount)
         external payable override nonReentrant returns (uint256)
     {
-        require(_token == address(PSEUDO_ETH), "token not supported");
+        require(_token == address(Constants.PSEUDO_ETH), "token not supported");
         require(_amount == 0 || _amount == msg.value, "msg.value < amount to repay");
         uint256 debtBalance = _getDebtBalanceOf(msg.sender);
         require(debtBalance > 0, "nothing to repay");
@@ -126,7 +124,7 @@ contract Bank is IBank, FlashloanProvider, ReentrancyGuard {
         }
         emit Repay(
             msg.sender,
-            address(PSEUDO_ETH),
+            address(Constants.PSEUDO_ETH),
             remainingDebt
         );
         if (refund > 0) payable(msg.sender).sendValue(refund);
