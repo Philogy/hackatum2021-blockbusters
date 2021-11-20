@@ -188,7 +188,7 @@ describe('Bank contract', function () {
   describe('borrow', async function () {
     it('no collateral', async function () {
       let amount = BigNumber.from(1000)
-      await expect(bank1.borrow(ethMagic, amount)).to.be.revertedWith('no collateral deposited')
+      await expect(bank1.borrow(ethMagic, amount)).to.be.revertedWith('Bank: No collateral')
     })
 
     it('basic borrow', async function () {
@@ -210,7 +210,7 @@ describe('Bank contract', function () {
       await hak1.approve(bank.address, collateralAmount)
       await bank1.deposit(hak.address, collateralAmount)
       await expect(bank1.borrow(ethMagic, borrowAmount)).to.be.revertedWith(
-        'borrow would exceed collateral ratio'
+        'Bank: Attempted overdraft'
       )
     })
 
@@ -226,7 +226,7 @@ describe('Bank contract', function () {
       expect(await bank1.getCollateralRatio(hak.address, await acc1.getAddress())).equals(16671)
 
       await expect(bank1.borrow(ethMagic, borrowAmount)).to.be.revertedWith(
-        'borrow would exceed collateral ratio'
+        'Bank: Attempted overdraft'
       )
       expect(await bank1.getCollateralRatio(hak.address, await acc1.getAddress())).equals(16668)
     })

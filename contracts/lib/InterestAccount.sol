@@ -75,5 +75,14 @@ library InterestAccount {
             _account.balance = _account.balance.sub(_decrease.sub(interest));
             _account.interest = 0;
         }
+
+    function increaseBalanceBy(
+        Account storage _account,
+        uint256 _increase,
+        uint256 _interestRate,
+        uint256 _blockNumber
+    ) internal {
+        updateInterest(_account, _interestRate, _blockNumber);
+        _account.balance = _account.balance.add(_increase);
     }
 }
