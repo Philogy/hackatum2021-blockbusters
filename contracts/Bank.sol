@@ -30,13 +30,9 @@ contract Bank is IBank, FlashloanProvider, ReentrancyGuard {
     mapping(address => mapping(address => InterestAccount.Account)) internal depositAccounts;
     mapping(address => InterestAccount.Account) internal ethDebtAccounts;
 
-<<<<<<< HEAD
-    constructor(address _priceOracle, address _hakToken) FlashloanProvider() {
-=======
     constructor(address _priceOracle, address _hakToken)
         FlashloanProvider() ReentrancyGuard()
     {
->>>>>>> main
         priceOracle = IPriceOracle(_priceOracle);
         hakToken = IERC20(_hakToken);
     }
