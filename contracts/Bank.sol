@@ -4,6 +4,7 @@ pragma solidity ^0.7.0;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 import "./lib/InterestAccount.sol";
 import "./interfaces/IPriceOracle.sol";
 import "./interfaces/IBank.sol";
@@ -11,6 +12,7 @@ import "./interfaces/IBank.sol";
 contract Bank is IBank {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
+    using Address for address payable;
     using InterestAccount for InterestAccount.Account;
 
     uint256 internal constant DEPOSIT_INTEREST = 3;
@@ -57,10 +59,38 @@ contract Bank is IBank {
         return true;
     }
 
+
     function withdraw(address _token, uint256 _amount)
         external override returns (uint256)
     {
 
+        InterestAccount.Account storage depositAccount
+            = depositAccounts[msg.sender][_token];
+        uint256 depositBalance = getBalance(_token);
+
+        if (_token == address(PSEUDO_ETH)) {
+            if(_amount == 0) {
+                payable(msg.sender).sendValue(depositBalance);
+                depositAccount.decreaseBalanceBy(depositBalance, DEPOSIT_INTEREST, _getBlockNumber());
+            } else {
+                require(depositBalance >= _amount, "Bank: insufficient HAK Balance");
+                payable(msg.sender).sendValue(_amount);
+                depositAccount.decreaseBalanceBy(_amount, DEPOSIT_INTEREST, _getBlockNumber());
+            }  
+        } else if (_token == address(hakToken)) {
+            if(_amount == 0) {
+                hakToken.safeTransfer(msg.sender, depositBalance);
+                depositAccount.decreaseBalanceBy(depositBalance, DEPOSIT_INTEREST, _getBlockNumber());
+            } else {
+                require(depositBalance >= _amount, "Bank: insufficient HAK Balance");
+                hakToken.safeTransfer(msg.sender, _amount);
+                depositAccount.decreaseBalanceBy(_amount, DEPOSIT_INTEREST, _getBlockNumber());
+            }
+        } else {
+            revert("Bank: Unsupported token");
+        }
+        emit Withdraw(msg.sender, _token, _amount);
+        return _amount == 0 ? depositBalance : _amount;
     }
 
     function borrow(address _token, uint256 _amount)
@@ -82,7 +112,7 @@ contract Bank is IBank {
     }
 
     function getBalance(address _token)
-        external view override returns (uint256)
+        public view override returns (uint256)
     {
         return depositAccounts[msg.sender][_token]
             .getTotalBalance(DEPOSIT_INTEREST, _getBlockNumber());
