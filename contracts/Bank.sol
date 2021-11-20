@@ -53,7 +53,6 @@ contract Bank is IBank, FlashloanProvider {
         return true;
     }
 
-
     function withdraw(address _token, uint256 _amount)
         external override nonReentrant returns (uint256)
     {
@@ -74,7 +73,7 @@ contract Bank is IBank, FlashloanProvider {
         } else {
             require(
                 getCollateralRatio(_token, msg.sender) >= MIN_COLLAT_RATIO,
-                "Bank: Withdrawing necessary"
+                "Bank: Withdrawing collateral"
             );
             hakToken.safeTransfer(msg.sender, _amount);
             emit Withdraw(msg.sender, _token, _amount);
@@ -158,7 +157,7 @@ contract Bank is IBank, FlashloanProvider {
             liquidatedDeposit,
             refund
         );
-        payable(msg.sender).sendValue(refund);
+        if (refund > 0) payable(msg.sender).sendValue(refund);
         return true;
     }
 
