@@ -7,22 +7,21 @@ import "../Bank.sol";
 contract VBTestBank is Bank {
     using SafeMath for uint256;
 
-    uint256 internal lastRealBlock;
+    uint256 internal immutable creationBlock;
     uint256 internal virtualBlockNumber;
 
     constructor(address _priceOracle, address _hakToken)
         Bank(_priceOracle, _hakToken)
     {
-        virtualBlockNumber = block.number;
+        creationBlock = block.number;
     }
 
     function advanceBlocks(uint256 _blocks) external {
-        virtualBlockNumber = virtualBlockNumber.add(_blocks);
-        lastRealBlock = block.number;
+        virtualBlockNumber = virtualBlockNumber.add(_blocks).sub(1);
     }
 
     function _getBlockNumber() internal override view returns (uint256) {
-        uint256 realBlockDelta = block.number.sub(lastRealBlock);
+        uint256 realBlockDelta = block.number.sub(creationBlock);
         return virtualBlockNumber.add(realBlockDelta);
     }
 }
