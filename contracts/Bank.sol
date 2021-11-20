@@ -96,10 +96,12 @@ contract Bank is IBank {
             getCollateralRatio(_token, _account) < MIN_COLLAT_RATIO,
             "Bank: Cannot liquidate account"
         );
+        require(_account != msg.sender, "Bank: Attempted self liquidation");
         uint256 debtBalance = _getDebtBalanceOf(_account);
         uint256 refund = msg.value.sub(debtBalance, "Bank: Insufficient repayment");
         ethDebtAccounts[_account].reset();
-        Account storage collateralAccount = depositAccounts[_account][address(hakToken)];
+        InterestAccount.Account storage collateralAccount =
+            depositAccounts[_account][_token];
         uint256 liquidatedDeposit = collateralAccount
             .getTotalBalance(DEPOSIT_INTEREST, _getBlockNumber());
         collateralAccount.reset();
