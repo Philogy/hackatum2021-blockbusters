@@ -75,6 +75,7 @@ library InterestAccount {
             _account.balance = _account.balance.sub(_decrease.sub(interest));
             _account.interest = 0;
         }
+    }
 
     function increaseBalanceBy(
         Account storage _account,

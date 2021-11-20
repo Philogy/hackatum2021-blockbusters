@@ -5,11 +5,12 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./lib/InterestAccount.sol";
 import "./interfaces/IPriceOracle.sol";
 import "./interfaces/IBank.sol";
 
-contract Bank is IBank {
+contract Bank is IBank, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
     using Address for address payable;
@@ -29,13 +30,13 @@ contract Bank is IBank {
     mapping(address => mapping(address => InterestAccount.Account)) internal depositAccounts;
     mapping(address => InterestAccount.Account) internal ethDebtAccounts;
 
-    constructor(address _priceOracle, address _hakToken) {
+    constructor(address _priceOracle, address _hakToken) ReentrancyGuard() {
         priceOracle = IPriceOracle(_priceOracle);
         hakToken = IERC20(_hakToken);
     }
 
     function deposit(address _token, uint256 _amount)
-        external payable override returns (bool)
+        external payable override nonReentrant returns (bool)
     {
         if (_token == address(PSEUDO_ETH)) {
             require(msg.value > 0, "Bank: Deposit of 0");
@@ -55,7 +56,7 @@ contract Bank is IBank {
 
 
     function withdraw(address _token, uint256 _amount)
-        external override returns (uint256)
+        external override nonReentrant returns (uint256)
     {
         InterestAccount.Account storage depositAccount
             = depositAccounts[msg.sender][_token];
@@ -76,7 +77,7 @@ contract Bank is IBank {
     }
 
     function borrow(address _token, uint256 _amount)
-        external override returns (uint256)
+        external override nonReentrant returns (uint256)
     {
         require(_token == address(PSEUDO_ETH), "Bank: Can only borrow ETH");
         uint256 assetBalance = getBalance(address(hakToken));
@@ -100,13 +101,13 @@ contract Bank is IBank {
     }
 
     function repay(address _token, uint256 _amount)
-        external payable override returns (uint256)
+        external payable override nonReentrant returns (uint256)
     {
 
     }
 
     function liquidate(address _token, address _account)
-        external payable override returns (bool)
+        external payable override nonReentrant returns (bool)
     {
         require(
             getCollateralRatio(_token, _account) < MIN_COLLAT_RATIO,
