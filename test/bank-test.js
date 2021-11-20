@@ -33,16 +33,6 @@ describe('Bank contract', function () {
 
   let ethMagic
 
-  async function mineBlocks(blocksToMine) {
-    let startBlock = await ethers.provider.getBlockNumber()
-    let timestamp = (await ethers.provider.getBlock(startBlock)).timestamp
-    for (let i = 1; i <= blocksToMine; ++i) {
-      await ethers.provider.send('evm_mine', [timestamp + i * 13])
-    }
-    let endBlock = await ethers.provider.getBlockNumber()
-    expect(endBlock).equals(startBlock + blocksToMine)
-  }
-
   beforeEach('deployment setup', async function () {
     [owner, acc1, acc2, acc3] = await ethers.getSigners()
     const oracleFactory = await ethers.getContractFactory('PriceOracleTest')
