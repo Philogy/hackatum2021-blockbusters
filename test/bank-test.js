@@ -301,13 +301,13 @@ describe('Bank contract', function () {
     it('nothing to repay', async function () {
       let amount = BigNumber.from(1000)
       await expect(bank1.repay(ethMagic, amount, { value: amount })).to.be.revertedWith(
-        'nothing to repay'
+        'Bank: No debt to repay'
       )
     })
 
     it('non-ETH token', async function () {
       let amount = BigNumber.from(1000)
-      await expect(bank1.repay(hak.address, amount)).to.be.revertedWith('token not supported')
+      await expect(bank1.repay(hak.address, amount)).to.be.revertedWith('Bank: Invalid debt token')
     })
 
     it('lower amount sent', async function () {
@@ -321,7 +321,7 @@ describe('Bank contract', function () {
         .withArgs(await acc1.getAddress(), ethMagic, borrowAmount, 15004)
       let amount = BigNumber.from(1000)
       await expect(bank1.repay(ethMagic, amount, { value: amount.sub(1) })).to.be.revertedWith(
-        'msg.value < amount to repay'
+        'Bank: Amount mismatch'
       )
     })
 

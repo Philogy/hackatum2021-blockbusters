@@ -105,7 +105,29 @@ contract Bank is IBank, ReentrancyGuard {
     function repay(address _token, uint256 _amount)
         external payable override nonReentrant returns (uint256)
     {
-
+        require(_token == address(PSEUDO_ETH), "Bank: Invalid debt token");
+        require(_amount <= msg.value, "Bank: Amount mismatch");
+        uint256 debtBalance = _getDebtBalanceOf(msg.sender);
+        require(debtBalance > 0, "Bank: No debt to repay");
+        InterestAccount.Account storage debtAccount = ethDebtAccounts[msg.sender];
+        uint256 leftOver;
+        uint256 refund;
+        uint256 remainingDebt;
+        if (debtBalance >= msg.value) {
+            debtAccount.decreaseBalanceBy(msg.value, DEBT_INTEREST, _getBlockNumber());
+            leftOver = debtAccount.balance;
+            remainingDebt = debtBalance - msg.value;
+        } else {
+            debtAccount.reset();
+            refund = msg.value.sub(debtBalance);
+        }
+        emit Repay(
+            msg.sender,
+            address(PSEUDO_ETH),
+            remainingDebt
+        );
+        if (refund > 0) payable(msg.sender).sendValue(refund);
+        return leftOver;
     }
 
     function liquidate(address _token, address _account)
