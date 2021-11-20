@@ -63,34 +63,22 @@ contract Bank is IBank {
     function withdraw(address _token, uint256 _amount)
         external override returns (uint256)
     {
-
         InterestAccount.Account storage depositAccount
             = depositAccounts[msg.sender][_token];
-        uint256 depositBalance = getBalance(_token);
-
+        uint256 depositedBalance = getBalance(_token);
+        if(_amount == 0) _amount = depositedBalance;
+        require(depositedBalance >= _amount, "Bank: Insufficient Balance");
+        depositAccount.decreaseBalanceBy(_amount, DEPOSIT_INTEREST, _getBlockNumber());
         if (_token == address(PSEUDO_ETH)) {
-            if(_amount == 0) {
-                payable(msg.sender).sendValue(depositBalance);
-                depositAccount.decreaseBalanceBy(depositBalance, DEPOSIT_INTEREST, _getBlockNumber());
-            } else {
-                require(depositBalance >= _amount, "Bank: insufficient HAK Balance");
-                payable(msg.sender).sendValue(_amount);
-                depositAccount.decreaseBalanceBy(_amount, DEPOSIT_INTEREST, _getBlockNumber());
-            }  
+            emit Withdraw(msg.sender, _token, _amount);
+            payable(msg.sender).sendValue(_amount);
         } else if (_token == address(hakToken)) {
-            if(_amount == 0) {
-                hakToken.safeTransfer(msg.sender, depositBalance);
-                depositAccount.decreaseBalanceBy(depositBalance, DEPOSIT_INTEREST, _getBlockNumber());
-            } else {
-                require(depositBalance >= _amount, "Bank: insufficient HAK Balance");
-                hakToken.safeTransfer(msg.sender, _amount);
-                depositAccount.decreaseBalanceBy(_amount, DEPOSIT_INTEREST, _getBlockNumber());
-            }
+            hakToken.safeTransfer(msg.sender, _amount);
+            emit Withdraw(msg.sender, _token, _amount);
         } else {
             revert("Bank: Unsupported token");
         }
-        emit Withdraw(msg.sender, _token, _amount);
-        return _amount == 0 ? depositBalance : _amount;
+        return _amount;
     }
 
     function borrow(address _token, uint256 _amount)
