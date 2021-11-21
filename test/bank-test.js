@@ -33,11 +33,21 @@ describe('Bank contract', function () {
 
   let ethMagic
 
+  async function mineBlocks(blocksToMine) {
+    let startBlock = await ethers.provider.getBlockNumber()
+    let timestamp = (await ethers.provider.getBlock(startBlock)).timestamp
+    for (let i = 1; i <= blocksToMine; ++i) {
+      await ethers.provider.send('evm_mine', [timestamp + i * 13])
+    }
+    let endBlock = await ethers.provider.getBlockNumber()
+    expect(endBlock).equals(startBlock + blocksToMine)
+  }
+
   beforeEach('deployment setup', async function () {
     [owner, acc1, acc2, acc3] = await ethers.getSigners()
     const oracleFactory = await ethers.getContractFactory('PriceOracleTest')
     const hakFactory = await ethers.getContractFactory('HAKTest')
-    const bankFactory = await ethers.getContractFactory('VBTestBank')
+    const bankFactory = await ethers.getContractFactory('Bank')
 
     oracle = await oracleFactory.deploy()
     hak = await hakFactory.deploy()
@@ -114,7 +124,7 @@ describe('Bank contract', function () {
     it('100 blocks', async function () {
       let amount = BigNumber.from(10000)
       await bank1.deposit(ethMagic, amount, { value: amount })
-      await bank.advanceBlocks(99)
+      await mineBlocks(99)
       await expect(bank1.withdraw(ethMagic, 0))
         .to.emit(bank, 'Withdraw')
         .withArgs(await acc1.getAddress(), ethMagic, 10300)
@@ -123,7 +133,7 @@ describe('Bank contract', function () {
     it('150 blocks', async function () {
       let amount = BigNumber.from(10000)
       await bank1.deposit(ethMagic, amount, { value: amount })
-      await bank.advanceBlocks(149)
+      await mineBlocks(149)
       await expect(bank1.withdraw(ethMagic, 0))
         .to.emit(bank, 'Withdraw')
         .withArgs(await acc1.getAddress(), ethMagic, 10450)
@@ -133,7 +143,7 @@ describe('Bank contract', function () {
     it('250 blocks', async function () {
       let amount = BigNumber.from(10000)
       await bank1.deposit(ethMagic, amount, { value: amount })
-      await bank.advanceBlocks(249)
+      await mineBlocks(249)
       await expect(bank1.withdraw(ethMagic, 0))
         .to.emit(bank, 'Withdraw')
         .withArgs(await acc1.getAddress(), ethMagic, 10750)
@@ -143,7 +153,7 @@ describe('Bank contract', function () {
     it('1311 blocks', async function () {
       let amount = BigNumber.from(10000)
       await bank1.deposit(ethMagic, amount, { value: amount })
-      await bank.advanceBlocks(1310)
+      await mineBlocks(1310)
       await expect(bank1.withdraw(ethMagic, 0))
         .to.emit(bank, 'Withdraw')
         .withArgs(await acc1.getAddress(), ethMagic, 13933)
@@ -154,12 +164,12 @@ describe('Bank contract', function () {
       let amount = BigNumber.from(10000)
       // deposit once, wait 100 blocks and check balance
       await bank1.deposit(ethMagic, amount, { value: amount })
-      await bank.advanceBlocks(100)
+      await mineBlocks(100)
       expect(await bank1.getBalance(ethMagic)).equals(10300)
 
       // deposit again to trigger account update, wait 100 blocks and withdraw all
       await bank1.deposit(ethMagic, amount, { value: amount })
-      await bank.advanceBlocks(99)
+      await mineBlocks(99)
       await expect(bank1.withdraw(ethMagic, 0))
         .to.emit(bank, 'Withdraw')
         .withArgs(
@@ -383,7 +393,7 @@ describe('Bank contract', function () {
       await expect(bank1.borrow(ethMagic, borrowAmount))
         .to.emit(bank, 'Borrow')
         .withArgs(await acc1.getAddress(), ethMagic, borrowAmount, 15004)
-      await bank.advanceBlocks(99)
+      await mineBlocks(99)
       let liquidatorEthBalanceBefore = await acc2.getBalance()
       let liquidatorHakBalanceBefore = await hak2.balanceOf(await acc2.getAddress())
       collateralAmount = ethers.utils.parseEther('15.4545')
@@ -416,7 +426,7 @@ describe('Bank contract', function () {
       await expect(bank1.borrow(ethMagic, borrowAmount))
         .to.emit(bank, 'Borrow')
         .withArgs(await acc1.getAddress(), ethMagic, borrowAmount, 15004)
-      await bank.advanceBlocks(99)
+      await mineBlocks(99)
       let liquidatorAmount = ethers.utils.parseEther('10.0')
       await expect(
         bank2.liquidate(hak.address, await acc1.getAddress(), { value: liquidatorAmount })
