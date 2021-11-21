@@ -3,356 +3,365 @@ pragma solidity ^0.7.0;
 import "./interfaces/IBank.sol";
 import "./interfaces/IPriceOracle.sol";
 import "./test/HAKToken.sol";
+
 contract Bank is IBank {
+    mapping(address => uint256) private accountBalanceHAK;
+    mapping(address => uint256) private accountBalanceETH;
+    mapping(address => uint256) private accountLoanETH;
 
-    address hak_address;
-    address oracle_address;
-    HAKTest HAK;
-    IPriceOracle Oracle;
-    address constant ETH_token_address = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-    mapping(address => Account) accounts;
+    mapping(address => uint256) private accountInterestHAK;
+    mapping(address => uint256) private accountInterestETH;
+    mapping(address => uint256) private accountLoanInterestETH;
 
-    mapping(address => Account) ether_accounts ;
+    mapping(address => uint256) private accountInterestLastBlockNumberHAK;
+    mapping(address => uint256) private accountInterestLastBlockNumberETH;
+    mapping(address => uint256) private accountLoanInterestLastBlockNumberETH;
 
-    mapping(address => uint256) owed_interest;  // in ETH
-    mapping(address => uint256) loans;  // in ETH
-    mapping(address => uint256) last_loan_interest_block;
-    uint HAKBalance = 0;
-    uint ETHBalance = 0;
+    address private priceOracleAddress;
+    IPriceOracle private priceOracle;
+    IERC20 private hakToken;
+    address private hakTokenAddress;
 
+    address private constant ETH_TOKEN =
+        0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
-    constructor(address oracle_address_, address hak_address_){
-        hak_address = hak_address_;
-        oracle_address = oracle_address_;
-        HAK = HAKTest(hak_address);
-        Oracle = IPriceOracle(oracle_address);
-
+    constructor(address _priceOracle, address _hakToken) {
+        priceOracleAddress = _priceOracle;
+        priceOracle = IPriceOracle(_priceOracle);
+        hakTokenAddress = _hakToken;
+        hakToken = IERC20(_hakToken);
     }
-    /**
-     * The purpose of this function is to allow end-users to deposit a given
-     * token amount into their bank account.
-     * @param token - the address of the token to deposit. If this address is
-     *                set to 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE then
-     *                the token to deposit is ETH.
-     * @param amount - the amount of the given token to deposit.
-     * @return - true if the deposit was successful, otherwise revert.
-     */
-    function deposit(address token, uint256 amount) payable override external returns (bool){
 
-        if (token == ETH_token_address && msg.value > 0) {
-          	require(msg.value >= amount, "insufficient ETH sent");
-
-            ether_accounts[msg.sender].interest += calcETHInterest(msg.sender);
-            ether_accounts[msg.sender].lastInterestBlock = block.number;
-          	ether_accounts[msg.sender].deposit += amount;
-            ETHBalance += msg.value;
-        }
-        else if ( token == hak_address) {
-      		require(HAK.transferFrom(msg.sender, address(this), amount) && amount > 0);
-
-      		HAKBalance += amount;
-      		accounts[msg.sender].interest += calcInterest(msg.sender);
-          accounts[msg.sender].lastInterestBlock = block.number;
-          accounts[msg.sender].deposit += amount;
+    function getNewInterest(address accountAddress, address token)
+        private
+        view
+        returns (uint256)
+    {
+        if (token == hakTokenAddress) {
+            uint256 pastBlockCount = block.number -
+                accountInterestLastBlockNumberHAK[accountAddress];
+            uint256 interest = (accountBalanceHAK[accountAddress] *
+                pastBlockCount *
+                3) / 10000;
+            return interest;
+        } else if (token == ETH_TOKEN) {
+            uint256 pastBlockCount = block.number -
+                accountInterestLastBlockNumberETH[accountAddress];
+            uint256 interest = (accountBalanceETH[accountAddress] *
+                pastBlockCount *
+                3) / 10000;
+            return interest;
         } else {
-          revert("token not supported");
+            revert("token not supported");
         }
-      	emit Deposit(msg.sender, token, amount);
-        return true;
     }
 
-    /**
-     * The purpose of this function is to allow end-users to withdraw a given
-     * token amount from their bank account. Upon withdrawal, the user must
-     * automatically receive a 3% interest rate per 100 blocks on their deposit.
-     * @param token - the address of the token to withdraw. If this address is
-     *                set to 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE then
-     *                the token to withdraw is ETH.
-     * @param amount - the amount of the given token to withdraw. If this param
-     *                 is set to 0, then the maximum amount available in the
-     *                 caller's account should be withdrawn.
-     * @return - the amount that was withdrawn plus interest upon success,
-     *           otherwise revert.
-     */
-    function withdraw(address token, uint256 amount) override external returns (uint256){
-
-       if (token == ETH_token_address) {
-
-      	  uint networth = getETHBalanceOf(msg.sender);
-         	require(networth != 0, "no balance");
-      	  uint draw = amount ;
-      	  if(amount == 0) { draw = networth; }
-
-      	  uint current_interest_gain = calcETHInterest(msg.sender);
-      	  require(networth - calcETHLoan(msg.sender) * 15000 * Oracle.getVirtualPrice(hak_address) / 10000000000000000000000 >=  draw && draw <= ETHBalance, "amount exceeds balance");
-
-      	  uint new_balance = networth - draw;
-      	  if(draw <= ether_accounts[msg.sender].interest + calcETHInterest(msg.sender) ){
-            ether_accounts[msg.sender].interest += calcETHInterest(msg.sender);
-            ether_accounts[msg.sender].interest -= draw;
-						ether_accounts[msg.sender].lastInterestBlock = block.number;
-
-          }else{
-            ether_accounts[msg.sender].deposit = new_balance;
-            ether_accounts[msg.sender].interest = 0;
-            ether_accounts[msg.sender].lastInterestBlock = block.number;
-
-          }
-
-          (bool sent, bytes memory data) = msg.sender.call{value: amount}("");
-          require(sent, "Failed to send Ether");
-          ETHBalance -= draw;
-          emit Withdraw(msg.sender, token, draw);
-         	return amount;
-        } else if ( token == hak_address) {
-          	uint draw = amount;
-          	if ( amount == 0 ) { draw = getBalanceOf( token, msg.sender );}
-            require(getBalanceOf(token, msg.sender) != 0, "no balance");
-            require( getBalanceOf(token, msg.sender) >=  draw && HAKBalance >= draw, "amount exceeds balance"); // -debt
-            uint new_balance = accounts[msg.sender].deposit + accounts[msg.sender].interest - draw;
-
-          if(draw <= accounts[msg.sender].interest + calcInterest(msg.sender) ){
-              accounts[msg.sender].interest += calcInterest(msg.sender);
-              accounts[msg.sender].interest -= draw;
-              accounts[msg.sender].lastInterestBlock = block.number;
-
-          }else{
-            accounts[msg.sender].deposit = new_balance;
-            accounts[msg.sender].interest = 0;
-            accounts[msg.sender].lastInterestBlock = block.number;
-
-          }
-
-      		require(HAK.transfer( msg.sender, draw));
-      		HAKBalance -= draw;
-
-          accounts[msg.sender].lastInterestBlock = block.number;
-          emit Withdraw(msg.sender, token, amount);
-        	return amount;
+    function calculateInterest(address accountAddress, address token) private {
+        if (token == hakTokenAddress) {
+            uint256 interest = getNewInterest(accountAddress, token);
+            accountInterestHAK[accountAddress] += interest;
+            accountInterestLastBlockNumberHAK[accountAddress] = block.number;
+        } else if (token == ETH_TOKEN) {
+            uint256 interest = getNewInterest(accountAddress, token);
+            accountInterestETH[accountAddress] += interest;
+            accountInterestLastBlockNumberETH[accountAddress] = block.number;
         } else {
-          revert("token not supported");
+            revert("token not supported");
         }
-
     }
 
-    /**
-     * The purpose of this function is to allow users to borrow funds by using their
-     * deposited funds as collateral. The minimum ratio of deposited funds over
-     * borrowed funds must not be less than 150%.
-     * @param token - the address of the token to borrow. This address must be
-     *                set to 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE, otherwise
-     *                the transaction must revert.
-     * @param amount - the amount to borrow. If this amount is set to zero (0),
-     *                 then the amount borrowed should be the maximum allowed,
-     *                 while respecting the collateral ratio of 150%.
-     * @return - the current collateral ratio.
-     */
-    function borrow(address token, uint256 amount) override external returns (uint256){
-        require(token == ETH_token_address, "token not supported");
-      	if ( getBalanceOf(token, msg.sender ) == 0 ) { revert ( "no collateral deposited") ; }
-        require(calcNeededCollateral(hak_address, amount) <= maxNewCollateral(hak_address, msg.sender), "borrow would exceed collateral ratio");
+    function deposit(address token, uint256 amount)
+        external
+        payable
+        override
+        returns (bool)
+    {
+        require(amount > 0);
+        if (token == hakTokenAddress) {
+            bool approved = hakToken.transferFrom(
+                msg.sender,
+                address(this),
+                amount
+            );
+            require(approved, "check your allowance");
+            calculateInterest(msg.sender, token);
+
+            accountBalanceHAK[msg.sender] += amount;
+            emit Deposit(msg.sender, token, amount);
+            return true;
+        } else if (token == ETH_TOKEN) {
+            require(msg.value == amount);
+            calculateInterest(msg.sender, token);
+
+            accountBalanceETH[msg.sender] += amount;
+            emit Deposit(msg.sender, token, amount);
+            return true;
+        }
+        revert("token not supported");
+    }
+
+    function withdraw(address token, uint256 amount)
+        external
+        override
+        returns (uint256)
+    {
+        require(amount >= 0);
+        if (token == hakTokenAddress) {
+            calculateInterest(msg.sender, token);
+            uint256 accountTotal = accountBalanceHAK[msg.sender] +
+                accountInterestHAK[msg.sender];
+
+            require(accountTotal > 0, "no balance");
+            require(accountTotal >= amount, "amount exceeds balance");
+            if (amount == 0) {
+                amount = accountTotal;
+            }
+
+            require(hakToken.balanceOf(address(this)) >= amount);
+            bool successful = hakToken.transfer(msg.sender, amount);
+            require(successful);
+            if (accountInterestHAK[msg.sender] >= amount) {
+                accountInterestHAK[msg.sender] -= amount;
+            } else {
+                accountBalanceHAK[msg.sender] -= (amount -
+                    accountInterestHAK[msg.sender]);
+                accountInterestHAK[msg.sender] = 0;
+            }
+            emit Withdraw(msg.sender, token, amount);
+
+            return amount;
+        } else if (token == ETH_TOKEN) {
+            calculateInterest(msg.sender, token);
+            uint256 accountTotal = accountBalanceETH[msg.sender] +
+                accountInterestETH[msg.sender];
+
+            require(accountTotal > 0, "no balance");
+            require(accountTotal >= amount, "amount exceeds balance");
+            if (amount == 0) {
+                amount = accountTotal;
+            }
+
+            require(address(this).balance >= amount);
+            msg.sender.transfer(amount);
+            if (accountInterestETH[msg.sender] >= amount) {
+                accountInterestETH[msg.sender] -= amount;
+            } else {
+                accountBalanceETH[msg.sender] -= (amount -
+                    accountInterestETH[msg.sender]);
+                accountInterestETH[msg.sender] = 0;
+            }
+            emit Withdraw(msg.sender, token, amount);
+
+            return amount;
+        }
+        revert("token not supported");
+    }
+
+    function borrow(address token, uint256 amount)
+        external
+        override
+        returns (
+            uint256
+        )
+    {
+        require(amount >= 0);
+        require(token == ETH_TOKEN, "token not supported");
+        require(accountBalanceHAK[msg.sender] > 0, "no collateral deposited");
+
+        uint256 pastBlockCount = block.number -
+            accountLoanInterestLastBlockNumberETH[msg.sender];
+        uint256 newInterest = (accountLoanETH[msg.sender] *
+            pastBlockCount *
+            5) / 10000;
+        accountLoanInterestETH[msg.sender] += newInterest;
+        accountLoanInterestLastBlockNumberETH[msg.sender] = block.number;
+
         if (amount == 0) {
-          amount = maxNewCollateral( token, msg.sender) * Oracle.getVirtualPrice(hak_address) * 20000 / 1000000000000000000 / 30000;
-          // Amount is the max possible one without exceeding a collateral ratio of 150%
+            calculateInterest(msg.sender, hakTokenAddress);
+            amount =
+                (2 *
+                    (accountBalanceHAK[msg.sender] +
+                        accountInterestHAK[msg.sender])) /
+                3;
+            amount -= (accountLoanETH[msg.sender] +
+                accountLoanInterestETH[msg.sender]);
         }
-        owed_interest[msg.sender] += calcCollateralInterest(msg.sender);
-        last_loan_interest_block[msg.sender] = block.number;
-        loans[msg.sender] += amount;
 
+        calculateInterest(msg.sender, hakTokenAddress);
 
-        (bool sent, bytes memory data) = msg.sender.call{value: amount}("");
-        require(sent, "Failed to send Ether");
+        uint256 collateralRatio = ((accountBalanceHAK[msg.sender] +
+            accountInterestHAK[msg.sender]) * 10000) /
+            (accountLoanETH[msg.sender] +
+                accountLoanInterestETH[msg.sender] +
+                amount);
 
-      	ETHBalance -= amount;
-        emit Borrow(msg.sender, token, amount, collateralRatio(token, msg.sender));
-        return collateralRatio(token, msg.sender);
+        require(
+            collateralRatio >= 15000,
+            "borrow would exceed collateral ratio"
+        );
 
-    }
-    function calcCollateralInterest(address user) internal view returns (uint256){
-        return loans[user] * 5 * (block.number - last_loan_interest_block[user]) / 10000;
+        accountLoanETH[msg.sender] += amount;
+        require(address(this).balance >= amount);
+        msg.sender.transfer(amount);
 
-    }
-    function calcETHLoan(address user) internal view returns(uint256){
-        return loans[user] + owed_interest[user] + calcCollateralInterest(user);
-    }
+        uint256 newCollateralRatio = getCollateralRatio(
+            hakTokenAddress,
+            msg.sender
+        );
+        emit Borrow(msg.sender, token, amount, newCollateralRatio);
 
-    function allowedToBorrow(address token, uint256 amount, address user) internal view returns(bool){
-        uint networth = getBalanceOf(token, user)  * Oracle.getVirtualPrice(hak_address) / 1000000000000000000; // in ETH
-        if (calcETHLoan(user) == 0 && networth > 0 ) {return true;}
-        return (networth * 10000 / (calcETHLoan(user)) >= 15000);
-    }
-
-
-    function calcNeededCollateral(address token, uint256 amount) internal view returns(uint256){
-        require(token == hak_address);
-        // TODO calculate in HAK not in ETH !
-        uint wantedLoanInHak = amount * 1000000000000000000  / Oracle.getVirtualPrice(token);
-        return wantedLoanInHak * 15000 / 10000; // 1.5x of the HAK value of the wanted allowance.
-
+        return newCollateralRatio;
     }
 
-    function maxNewCollateral(address token, address user)  internal view returns (uint){
-        uint owedETH = calcETHLoan(user) * 1000000000000000000 / Oracle.getVirtualPrice(hak_address) ; // Owed ETH in HAK
-        uint networth = getBalanceOf(token, user) ;  // HAK networth
-        return (networth * 10000 - (15000 * owedETH)) / 10000;
-    }
+    function repay(address token, uint256 amount)
+        external
+        payable
+        override
+        returns (uint256)
+    {
+        require(amount >= 0, "amount is < 0");
+        require(token == ETH_TOKEN, "token not supported");
 
-    function collateralSafe(address token, address user) internal view returns(bool){
-        uint networth = getBalanceOf(token, user) * Oracle.getVirtualPrice(hak_address) / 1000000000000000000; // in ETH Value
-        uint ethloan = calcETHLoan(user);
-        if (ethloan == 0){ return true;}
-        return (( networth * 10000 /
-            ( 15000 * (ethloan)) ) >= 1);
-    }
+        uint256 pastBlockCount = block.number -
+            accountLoanInterestLastBlockNumberETH[msg.sender];
+        uint256 interest = (accountLoanETH[msg.sender] * pastBlockCount * 5) /
+            10000;
+        accountLoanInterestETH[msg.sender] += interest;
+        accountLoanInterestLastBlockNumberETH[msg.sender] = block.number;
 
-    /**
-     * The purpose of this function is to allow users to repay their loans.
-     * Loans can be repaid partially or entirely. When replaying a loan, an
-     * interest payment is also required. The interest on a loan is equal to
-     * 5% of the amount lent per 100 blocks. If the loan is repaid earlier,
-     * or later then the interest should be proportional to the number of
-     * blocks that the amount was borrowed for.
-     * @param token - the address of the token to repay. If this address is
-     *                set to 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE then
-     *                the token is ETH.
-     * @param amount - the amount to repay including the interest.
-     * @return - the amount still left to pay for this loan, excluding interest.
-     */
-    function repay(address token, uint256 amount)  payable override external returns (uint256){
-      	require(token == ETH_token_address, "token not supported");
-        uint debt = calcETHLoan(msg.sender);
-      	if (debt == 0){ revert("nothing to repay"); }
-      	if ( msg.value < amount ) {revert("msg.value < amount to repay");}
-      	owed_interest[msg.sender] += calcETHInterest(msg.sender);
-      	if (msg.value > debt) {
-          loans[msg.sender] = 0;
-          owed_interest[msg.sender] = 0 ;
-        }else {
-          uint debt_interest = owed_interest[msg.sender];
-          if (msg.value > debt_interest) {
-          	owed_interest[msg.sender] = 0 ;
-          	loans[msg.sender] = loans[msg.sender] - (msg.value - debt_interest);
-          }else{
-            owed_interest[msg.sender] -= msg.value ;
-          }
-
+        if (amount == 0) {
+            amount =
+                accountLoanETH[msg.sender] +
+                accountLoanInterestETH[msg.sender];
         }
-        last_loan_interest_block[msg.sender] = block.number;
-      	debt -= msg.value;
-        ETHBalance += msg.value;
-        emit Repay(msg.sender, token, debt); // debt in ETH
-      	return loans[msg.sender] ;
+
+        require(accountLoanInterestETH[msg.sender] > 0, "nothing to repay");
+        require(msg.value >= amount, "msg.value < amount to repay");
+
+        if (amount <= accountLoanInterestETH[msg.sender]) {
+            accountLoanInterestETH[msg.sender] -= amount;
+        } else {
+            require(
+                accountLoanETH[msg.sender] >=
+                    (amount - accountLoanInterestETH[msg.sender]),
+                "insufficient eth balance in account"
+            );
+            accountLoanETH[msg.sender] -= (amount -
+                accountLoanInterestETH[msg.sender]);
+            accountLoanInterestETH[msg.sender] = 0;
+        }
+
+        uint256 remainingDebt = accountLoanETH[msg.sender];
+        require(
+            address(this).balance >= remainingDebt,
+            "insufficient eth balance in smart contract"
+        );
+        msg.sender.transfer(remainingDebt);
+
+        emit Repay(msg.sender, token, remainingDebt);
+        return remainingDebt;
     }
 
-    /**
-     * The purpose of this function is to allow so called keepers to collect bad
-     * debt, that is in case the collateral ratio goes below 150% for any loan.
-     * @param token - the address of the token used as collateral for the loan.
-     * @param account - the account that took out the loan that is now undercollateralized.
-     * @return - true if the liquidation was successful, otherwise revert.
-     */
-    function liquidate(address token, address account) payable override external returns (bool){
-      	require(token == hak_address, "token not supported");
-      	require(account != msg.sender, "cannot liquidate own position");
-      	require(this.getCollateralRatio(token, account) <= 15000, "healty position");
+    function liquidate(address token, address account)
+        external
+        payable
+        override
+        returns (bool)
+    {
+        require(token == hakTokenAddress, "token not supported");
+        require(account != msg.sender, "cannot liquidate own position");
+        require(getCollateralRatio(token, account) < 15000, "healty position");
 
-      	uint owed = calcETHLoan(account);
-      	require(msg.value >= owed, "insufficient ETH sent by liquidator");
+        uint256 pastBlockCount = block.number -
+            accountLoanInterestLastBlockNumberETH[account];
+        uint256 interest = (accountLoanETH[account] * pastBlockCount * 5) /
+            10000;
 
+        require(
+            msg.value >= (accountLoanETH[account] + interest),
+            "insufficient ETH sent by liquidator"
+        );
 
-      	uint col = getBalanceOf(token, account);
+        uint256 amountOfCollateral = accountBalanceHAK[account] +
+            accountInterestHAK[account];
+        accountBalanceHAK[msg.sender] += amountOfCollateral;
+        accountBalanceHAK[account] = 0;
 
-      	accounts[account].deposit = 0;
-      	accounts[account].interest = 0;
-      	accounts[account].lastInterestBlock = block.number;
+        uint256 amountSentBack = (msg.value) -
+            (accountLoanETH[account] + interest);
 
-      	// The liquidator gets the collateral from the liquidated account
+        accountLoanETH[account] = 0;
+        accountLoanInterestETH[account] = 0;
 
-      	require(HAK.transfer(msg.sender, col));
-      	HAKBalance -= col;
-      	// Erase the debts of the liquidated account
-      	loans[account] = 0;
-        owed_interest[account] = 0;
+        bool success = hakToken.transfer(msg.sender, amountOfCollateral);
+        require(success, "transaction failed");
 
-      	if (msg.value > owed) {
-          // Pay back what the liquidator paid in excess
-          (bool sent, bytes memory data) = msg.sender.call{value: msg.value-owed}("");
-          require(sent, "Failed to send Ether");
-        }
-      	ETHBalance += owed;
+        msg.sender.transfer(amountSentBack);
 
-
-      	emit Liquidate(msg.sender, account, token, col, msg.value-owed);
-
-
+        emit Liquidate(
+            msg.sender,
+            account,
+            token,
+            amountOfCollateral,
+            amountSentBack
+        );
         return true;
     }
 
-    /**
-     * The purpose of this function is to return the collateral ratio for any account.
-     * The collateral ratio is computed as the value deposited divided by the value
-     * borrowed. However, if no value is borrowed then the function should return
-     * uint256 MAX_INT = type(uint256).max
-     * @param token - the address of the deposited token used a collateral for the loan.
-     * @param account - the account that took out the loan.
-     * @return - the value of the collateral ratio with 2 percentage decimals, e.g. 1% = 100.
-     *           If the account has no deposits for the given token then return zero (0).
-     *           If the account has deposited token, but has not borrowed anything then
-     *           return MAX_INT.
-     */
-    function getCollateralRatio(address token, address account) view override external returns (uint256){
+    function getCollateralRatio(address token, address account)
+        public
+        view
+        override
+        returns (uint256)
+    {
+        require(token == hakTokenAddress);
 
-        uint networth = getBalanceOf(token, account) * Oracle.getVirtualPrice(hak_address) / 1000000000000000000;
-        uint owedETH = calcETHLoan(account);
-
-        if(owedETH == 0 ) { return type(uint256).max; }
-
-        else { return networth * 10000 / owedETH ;}
-        // collateral Ratio in percentage
-    }
-    function collateralRatio(address token, address account) view internal returns (uint256){
-
-        uint networth = getBalanceOf(token, account) * Oracle.getVirtualPrice(hak_address) / 1000000000000000000;
-        uint owedETH = calcETHLoan(account);
-
-        if(owedETH == 0 ) { return type(uint256).max; }
-
-        else { return networth * 10000 / owedETH ;}
-        // collateral Ratio in percentage
-    }
-
-    /**
-     * The purpose of this function is to return the balance that the caller
-     * has in their own account for the given token (including interest).
-     * @param token - the address of the token for which the balance is computed.
-     * @return - the value of the caller's balance with interest, excluding debts.
-     */
-    function getBalanceOf(address token, address user) view internal returns (uint256){
-        uint interest = calcInterest(user);
-        uint sum = accounts[user].interest + accounts[user].deposit + interest ;
-        return sum;
-    }
-    function getETHBalanceOf(address user) view internal returns (uint256){
-        uint interest = calcETHInterest(msg.sender);
-        uint sum = ether_accounts[msg.sender].interest + ether_accounts[msg.sender].deposit + interest ;
-        return sum;
-    }
-
-    function getBalance(address token) view override external returns (uint256){
-      	if (token == ETH_token_address) {
-          return getETHBalanceOf(msg.sender);
-        } else if (token == hak_address) {
-          return getBalanceOf(token, msg.sender);
+        if (accountBalanceHAK[account] == 0) {
+            return 0;
+        } else if (accountLoanETH[account] == 0) {
+            return type(uint256).max;
         } else {
-          revert("token not supported");
+            uint256 newHAKInterest = accountInterestHAK[account] +
+                getNewInterest(account, token);
+
+            uint256 hakToEthFactor = priceOracle.getVirtualPrice(
+                hakTokenAddress
+            ) / 1000000000000000000;
+
+            uint256 collateralRatio = ((accountBalanceHAK[account] +
+                newHAKInterest) *
+                hakToEthFactor *
+                10000) /
+                (accountLoanETH[account] + getTotalLoanInterest(account));
+            return collateralRatio;
         }
     }
 
-    function calcInterest(address user) view internal returns (uint){
-        return accounts[user].deposit * 3 / 10000 * (block.number - accounts[user].lastInterestBlock);
-    }
-    function calcETHInterest(address user) view internal returns (uint){
-        return ether_accounts[user].deposit * 3 / 10000 * (block.number - ether_accounts[user].lastInterestBlock);
+    function getTotalLoanInterest(address account)
+        private
+        view
+        returns (uint256)
+    {
+        uint256 pastBlockCount = block.number -
+            accountLoanInterestLastBlockNumberETH[account];
+        uint256 newInterest = (accountLoanETH[account] * pastBlockCount * 5) /
+            10000;
+        uint256 totalLoanInterest = accountLoanInterestETH[account] +
+            newInterest;
+        return totalLoanInterest;
     }
 
+    function getBalance(address token) public view override returns (uint256) {
+        if (token == hakTokenAddress) {
+            return
+                accountBalanceHAK[msg.sender] +
+                getNewInterest(msg.sender, token);
+        } else if (token == ETH_TOKEN) {
+            return
+                accountBalanceETH[msg.sender] +
+                getNewInterest(msg.sender, token);
+        } else {
+            revert("unsupported token");
+        }
+    }
 }
