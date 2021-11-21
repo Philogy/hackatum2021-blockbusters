@@ -3,7 +3,10 @@ module.exports = {
     commonjs: true,
     es2021: true,
     node: true,
-    jest: true,
+    jest: true
+  },
+  globals: {
+    task: 'readonly'
   },
   extends: 'eslint:recommended',
   parserOptions: {
