@@ -10,7 +10,11 @@ describe('HackaTUM_NFT', () => {
   let teams = realTeams
 
   before(async () => {
-    [owner, user1] = await ethers.getSigners()
+    console.log(
+      'realTeams.map(team => team.wallet): ',
+      realTeams.map((team) => team.wallet)
+    )
+    ;[owner, user1] = await ethers.getSigners()
     realTeams[ownerTeamId].wallet = owner.address
 
     const HackaTUM_NFTFactory = await ethers.getContractFactory('HackaTUM_NFT')

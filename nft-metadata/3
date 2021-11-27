@@ -1,0 +1,20 @@
+{
+  "description": "NFT awarded to the organisers of the Quantstamp HackaTUM 2021 challenge",
+  "name": "Quantstamp HackaTUM 2021 Organisers",
+  "image": "ipfs://QmbSX7PadaJmSXDCJkfRyZdneS8L9KL3CChdz46HkcbhFH/leaderboard-final-cut.png",
+  "attributes": [
+    {
+      "trait_type": "Place",
+      "value": "Awesome"
+    },
+    {
+      "trait_type": "Hours worked",
+      "value": "All of them"
+    },
+    {
+      "trait_type": "Questions answered",
+      "value": "Too many"
+    }
+  ]
+}
+

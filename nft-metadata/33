@@ -1,0 +1,31 @@
+{
+  "description": "NFT awarded to participants of the Quantstamp HackaTUM 2021 challenge",
+  "name": "Secure Bank: Quantstamp HackaTUM 2021",
+  "image": "ipfs://QmbSX7PadaJmSXDCJkfRyZdneS8L9KL3CChdz46HkcbhFH/leaderboard-final-cut-08.png",
+  "attributes": [
+    {
+      "trait_type": "Place",
+      "value": "#8"
+    },
+    {
+      "trait_type": "Final protected HAK",
+      "display_type": "number",
+      "value": 200
+    },
+    {
+      "trait_type": "Total Pwned HAK",
+      "display_type": "number",
+      "value": 236.14
+    },
+    {
+      "trait_type": "Final Sum",
+      "display_type": "number",
+      "value": 438.14
+    },
+    {
+      "trait_type": "Final Score",
+      "display_type": "number",
+      "value": 73.02
+    }
+  ]
+}

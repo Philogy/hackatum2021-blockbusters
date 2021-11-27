@@ -47,7 +47,7 @@ contract HackaTUM_NFT is ERC721, Ownable {
     }
 
     function _baseURI() internal pure override returns (string memory) {
-        return "ipfs://asdfsdfsdf/";
+        return "ipfs://QmNQdsS359kMPzALtanwcquMaeabD6uDbc2WC4btNsubid/";
     }
 
     function _initMint(address _recipient, uint256 _teamId) internal {
