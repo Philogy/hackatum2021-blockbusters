@@ -21,8 +21,14 @@ task('accounts', 'Prints the list of accounts', async (taskArgs, hre) => {
  * @type import('hardhat/config').HardhatUserConfig
  */
 const accounts = process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : []
+
 module.exports = {
-  solidity: '0.7.0',
+  solidity: {
+    version: '0.8.10',
+    settings: {
+      optimizer: { enabled: true, runs: 10_000 }
+    }
+  },
   defaultNetwork: 'goerli',
   networks: {
     goerli: {
