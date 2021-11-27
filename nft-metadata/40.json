@@ -1,0 +1,31 @@
+{
+  "description": "Participation NFT awarded to participants of the Quantstamp HackaTUM 2021 challenge",
+  "name": "Team Baba: Quantstamp HackaTUM 2021",
+  "image": "ipfs://QmbSX7PadaJmSXDCJkfRyZdneS8L9KL3CChdz46HkcbhFH/leaderboard-final-cut-10.png",
+  "attributes": [
+    {
+      "trait_type": "Place",
+      "value": "#10"
+    },
+    {
+      "trait_type": "Final protected HAK",
+      "display_type": "number",
+      "value": 100
+    },
+    {
+      "trait_type": "Total Pwned HAK",
+      "display_type": "number",
+      "value": 100
+    },
+    {
+      "trait_type": "Final Sum",
+      "display_type": "number",
+      "value": 100
+    },
+    {
+      "trait_type": "Final Score",
+      "display_type": "number",
+      "value": 12.5
+    }
+  ]
+}

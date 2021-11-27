@@ -1,0 +1,31 @@
+{
+  "description": "Participation NFT awarded to participants of the Quantstamp HackaTUM 2021 challenge",
+  "name": "Whistleblower: Quantstamp HackaTUM 2021",
+  "image": "ipfs://QmbSX7PadaJmSXDCJkfRyZdneS8L9KL3CChdz46HkcbhFH/leaderboard-final-cut-20.png",
+  "attributes": [
+    {
+      "trait_type": "Place",
+      "value": "#20"
+    },
+    {
+      "trait_type": "Final protected HAK",
+      "display_type": "number",
+      "value": 0
+    },
+    {
+      "trait_type": "Total Pwned HAK",
+      "display_type": "number",
+      "value": 100
+    },
+    {
+      "trait_type": "Final Sum",
+      "display_type": "number",
+      "value": 100
+    },
+    {
+      "trait_type": "Final Score",
+      "display_type": "number",
+      "value": 2.08
+    }
+  ]
+}

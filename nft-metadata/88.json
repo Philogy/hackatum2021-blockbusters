@@ -1,0 +1,31 @@
+{
+  "description": "Participation NFT awarded to participants of the Quantstamp HackaTUM 2021 challenge",
+  "name": "Quantstamp challenge winners: Quantstamp HackaTUM 2021",
+  "image": "ipfs://QmbSX7PadaJmSXDCJkfRyZdneS8L9KL3CChdz46HkcbhFH/leaderboard-final-cut-22.png",
+  "attributes": [
+    {
+      "trait_type": "Place",
+      "value": "#22"
+    },
+    {
+      "trait_type": "Final protected HAK",
+      "display_type": "number",
+      "value": 99
+    },
+    {
+      "trait_type": "Total Pwned HAK",
+      "display_type": "number",
+      "value": 99
+    },
+    {
+      "trait_type": "Final Sum",
+      "display_type": "number",
+      "value": 198
+    },
+    {
+      "trait_type": "Final Score",
+      "display_type": "number",
+      "value": 1.37
+    }
+  ]
+}
